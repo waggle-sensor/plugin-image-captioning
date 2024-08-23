@@ -1,1 +1,11 @@
-pywaggle[all]
+transformers==4.44.*
+Pillow
+Requests
+croniter
+timm==1.0.*
+einops
+packaging
+pywaggle[vision]==0.56.*
+# numpy < 1.24 does not work with the transformer or pytorch
+numpy==1.24.*
+huggingface_hub[cli]==0.24.*
