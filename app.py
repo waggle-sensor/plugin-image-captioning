@@ -18,6 +18,8 @@ def run_example(model, processor, task_prompt, image, text_input=None):
         prompt = task_prompt + text_input
     inputs = processor(text=prompt, images=image, return_tensors="pt")
 
+    image_height, image_width = image.shape[:2]
+
     generated_ids = model.generate(
     input_ids=inputs["input_ids"],
     pixel_values=inputs["pixel_values"],
@@ -34,7 +36,7 @@ def run_example(model, processor, task_prompt, image, text_input=None):
     parsed_answer = processor.post_process_generation(
         generated_text, 
         task=task_prompt, 
-        image_size=(image.width, image.height)
+        image_size=(image_width, image_height)
     )
 
     return parsed_answer
@@ -166,26 +168,26 @@ def run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-debug", dest="debug", action="store_true",
+        "--debug", dest="debug", action="store_true",
         default=False, help="Enable debugging")
     parser.add_argument(
-        '-stream', dest='stream',
+        '--stream', dest='stream',
         action='store', default="file:///app/icon.png", type=str,
         help='URL of the stream or image file. Examples: rtsp://camera:554. Default is file:///app/icon.png.')
     parser.add_argument(
-        "-fast-acquisition", dest="fast_acquisition",
+        "--fast-acquisition", dest="fast_acquisition",
         action="store_true", default=False,
         help="Acquire input image before loading the model. This option allows for time-sensitive data acquisition as loading model takes time. Ignored when cronjob mode.")
     parser.add_argument(
-        '-out-dir', dest='out_dir',
+        '--out-dir', dest='out_dir',
         action='store', default="", type=str,
         help='Path to save images locally in %%Y-%%m-%%dT%%H:%%M:%%S%z.jpg format')
     parser.add_argument(
-        '-cronjob', dest='cronjob',
+        '--cronjob', dest='cronjob',
         action='store', default="", type=str,
         help='Time interval expressed in cronjob style')
     parser.add_argument(
-        '-model-path', dest='model_path',
+        '--model-path', dest='model_path',
         action='store', default="/app/Florence-2-base", type=str,
         help='Model path. Default is /app/Florence-2-base')
     args = parser.parse_args()

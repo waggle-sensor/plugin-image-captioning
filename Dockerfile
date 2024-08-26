@@ -6,6 +6,9 @@ RUN apt-get update \
   wget \
   curl
 
+COPY requirements.txt /app/
+RUN pip3 install -r /app/requirements.txt
+
 # Using huggingface-cli to download the Florence2 model
 # --local-dir disables the caching in huggingface-cli to place
 # actual files in the --local-dir, not in $HOME/.cache/huggingface
@@ -15,9 +18,6 @@ RUN huggingface-cli download \
   --revision ee1f1f163f352801f3b7af6b2b96e4baaa6ff2ff \
   microsoft/Florence-2-base
 
-COPY requirements.txt /app/
-RUN pip3 install -r /app/requirements.txt
-
-COPY app.py upload.py flash_attn.py icon.png /app/
+COPY app.py flash_attn.py icon.png /app/
 WORKDIR /app
 ENTRYPOINT ["python3", "-u", "/app/app-cpu.py"]
