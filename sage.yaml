@@ -1,5 +1,6 @@
 name: "plugin-image-captioning"
 description: "Captioning an image using LLMs"
+version: "0.1.0"
 keywords: "image-captioning, large language model"
 authors: "Ryan Rearden <rrearden@udallas.edu>, Seongha Park <seongha.park@anl.gov>, and Yongho Kim <yongho.kim@anl.gov>"
 collaborators: "The sage team"
