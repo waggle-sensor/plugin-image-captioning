@@ -88,9 +88,14 @@ def captioning(args, model, processor, sample):
         logging.info(f'Description: {description}')
         sample_path = "sample.jpg"
         with Plugin() as plugin:
-            sample.save(sample_path)
-            plugin.upload_file(sample_path, timestamp=sample.timestamp)
+            if args.skip_uploading_image:
+                logging.info("--skip-uploading-image is enabled. Skipping image upload.")
+            else:
+                sample.save(sample_path)
+                plugin.upload_file(sample_path, timestamp=sample.timestamp)
+                logging.info("Image staged for upload")
             plugin.publish("env.image.description", description, timestamp=sample.timestamp)
+            logging.info("Published the description")
     else:
         dt = datetime.fromtimestamp(sample.timestamp / 1e9)
         base_dir = os.path.join(args.out_dir, dt.astimezone(timezone.utc).strftime('%Y/%m/%d/%H'))
@@ -190,6 +195,10 @@ if __name__ == '__main__':
         '--model-path', dest='model_path',
         action='store', default="/app/Florence-2-base", type=str,
         help='Model path. Default is /app/Florence-2-base')
+    parser.add_argument(
+        '--skip-uploading-image', dest='skip_uploading_image',
+        action='store_true', default=False,
+        help='When enabled skip uploading the input image. Ignored when --output-dir presents')
     args = parser.parse_args()
 
     logging.basicConfig(

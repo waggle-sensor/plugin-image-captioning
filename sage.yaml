@@ -29,3 +29,6 @@ inputs:
   - id: "model-path"
     type: "string"
     description: "Path to the model. Default is /app/Florence-2-base."
+  - id: "skip-uploading-image"
+    type: "bool"
+    description: "When enabled skip uploading the input image. Ignored when --output-dir presents."

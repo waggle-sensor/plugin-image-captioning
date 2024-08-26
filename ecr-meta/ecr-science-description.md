@@ -29,6 +29,7 @@ All of these prompts are combined in order to give the most comprehensive inform
 '--out-dir': Path to save images locally in %Y-%m-%dT%H:%M:%S%z.jpg format.
 '--cronjob': Time interval expressed in cronjob style. The program runs indefinitely.
 '--model-path': Path to the model. Default is /app/Florence-2-base.
+'--skip-uploading-image': When enabled skip uploading the input image. Ignored when --output-dir presents.
 ```
 
 # Output and Ontology
