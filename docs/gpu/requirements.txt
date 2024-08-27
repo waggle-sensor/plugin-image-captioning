@@ -1,0 +1,6 @@
+transformers
+Pillow
+Requests
+timm
+einops
+packaging

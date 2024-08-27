@@ -1,0 +1,64 @@
+# NOTE: nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3 works on CUDA 11.4
+#       however flash_attn==2.6.3 requires CUDA 11.6.
+#       We chose the image below which has CUDA 11.8
+FROM shubhamgupto/jp5.1-cuda11.8-cudnn9-trt8.5
+
+RUN apt-get update \
+  && apt-get install -y \
+  python3-pip \ 
+  wget \
+  curl \
+  git \
+  # torch 2.1 and torchvision v0.16.0
+  libopenblas-base \
+  libopenmpi-dev \
+  libomp-dev \
+  libjpeg-dev \
+  zlib1g-dev \
+  libpython3-dev \
+  libopenblas-dev \
+  libavcodec-dev \
+  libavformat-dev 
+  libswscale-dev
+
+RUN pip3 install --upgrade pip setuptools
+
+COPY requirements.txt /app/
+RUN pip3 install -r /app/requirements.txt
+
+# The source of torch wheel is https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048
+# The requirements.txt installs the latest Pytorch, probably by transformer.
+# We reinstall Pytorch with the version that works on JP 5.1
+COPY torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl /tmp/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl
+RUN pip3 install 'Cython<3'
+RUN pip3 install /tmp/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl \
+  && rm /tmp/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl
+
+# NOTE: Installing torchvision v0.16.1 with torch 2.1 did not succeed,
+#       ModuleNotFoundError: No module named 'torch._custom_ops'
+#       We pin torchvision to v0.16.0
+# NOTE: python3 setup.py install --user from https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048
+#       does not remove torchvision installed by transformer. We use pip instead.
+RUN cd /tmp/ \
+  && git clone --branch v0.16.0 https://github.com/pytorch/vision torchvision \
+  && cd torchvision \
+  && export BUILD_VERSION=v0.16.0 \
+  && pip3 install . \
+  && cd / \
+  && rm -rf /tmp/torchvision
+
+# Without ninja installing Flash Attention take hours or days because it's using a single CPU
+RUN pip3 install ninja
+RUN pip3 install flash_attn --no-build-isolation
+
+RUN huggingface-cli download \
+  --local-dir /app/Florence-2-base \
+  --revision ee1f1f163f352801f3b7af6b2b96e4baaa6ff2ff \
+  microsoft/Florence-2-base
+
+COPY icon.png /app/testphotos
+COPY app.py /app/
+WORKDIR /app
+# Command to run your Python scripts sequentially
+CMD ["python3", "-u", "app.py"]
+

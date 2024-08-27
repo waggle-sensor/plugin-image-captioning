@@ -1,0 +1,57 @@
+# NOTE: there is no l4t-torch for Jetpack 6.x as they recommend using the CUDA base container.
+#       refernece (https://forums.developer.nvidia.com/t/jetpack-6-0-production-release-announcement/291709/2)
+FROM nvcr.io/nvidia/l4t-jetpack:r36.3.0
+
+RUN apt-get update \
+  && apt-get install -y \
+  python3-pip \ 
+  wget \
+  curl \
+  git \
+  # For torch
+  libopenblas-base \
+  libopenmpi-dev \
+  libomp-dev \
+  # For torchvision
+  libjpeg-dev \
+  zlib1g-dev \
+  libpython3-dev \
+  libopenblas-dev \
+  libavcodec-dev \
+  libavformat-dev \
+  libswscale-dev
+
+RUN pip3 install --upgrade pip setuptools
+RUN pip3 install 'Cython<3'
+
+# The source of the wheels is https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048
+COPY torch-2.3.0-cp310-cp310-linux_aarch64.whl \
+  torchvision-0.18.0a0+6043bc2-cp310-cp310-linux_aarch64.whl \
+  torchaudio-2.3.0+952ea74-cp310-cp310-linux_aarch64.whl \
+  /tmp/
+RUN pip3 install /tmp/torch-2.3.0-cp310-cp310-linux_aarch64.whl \
+  /tmp/torchvision-0.18.0a0+6043bc2-cp310-cp310-linux_aarch64.whl \
+  /tmp/torchaudio-2.3.0+952ea74-cp310-cp310-linux_aarch64.whl \
+  && rm -f /tmp/torch*
+
+COPY requirements.txt /app/
+RUN pip3 install -r /app/requirements.txt
+
+# Without ninja installing Flash Attention take hours because it's using a single CPU
+RUN pip3 install ninja
+# Without MAX_JOBS it does not seem there is a parallelism in the installation
+# Putting MAX_JOBS may be already too much to a NX
+# RUN MAX_JOBS=3 pip3 install flash_attn --no-build-isolation
+RUN pip3 install flash_attn --no-build-isolation
+
+RUN huggingface-cli download \
+  --local-dir /app/Florence-2-base \
+  --revision ee1f1f163f352801f3b7af6b2b96e4baaa6ff2ff \
+  microsoft/Florence-2-base
+
+COPY icon.png /app/testphotos/
+COPY app.py /app/
+WORKDIR /app
+# Command to run your Python scripts sequentially
+CMD ["python3", "-u", "app.py"]
+

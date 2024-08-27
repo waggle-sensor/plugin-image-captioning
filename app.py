@@ -84,7 +84,10 @@ def generateDescription(model, processor, image):
 
 def captioning(args, model, processor, sample):
     if args.out_dir == "":
+        start_t = time.time()
         description = generateDescription(model, processor, sample.data)
+        end_t = time.time()
+        logging.info(f'Elapsed time for description generation: {end_t - start_t} seconds')
         logging.info(f'Description: {description}')
         sample_path = "sample.jpg"
         with Plugin() as plugin:
