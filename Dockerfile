@@ -20,4 +20,4 @@ RUN huggingface-cli download \
 
 COPY app.py flash_attn.py icon.png /app/
 WORKDIR /app
-ENTRYPOINT ["python3", "-u", "/app/app-cpu.py"]
+ENTRYPOINT ["python3", "-u", "/app/app.py"]
