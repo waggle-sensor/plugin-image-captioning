@@ -1,0 +1,27 @@
+version: '3'
+
+services:
+  usertoserver:
+    build: .
+    volumes:
+      - shared_data:/app/data
+    command: python -u /app/userToServer.py
+    network_mode: "host"
+
+  servertouser:
+    build: .
+    volumes:
+      - shared_data:/app/data
+    command: python -u /app/serverToUser_justimg.py
+    network_mode: "host"
+
+  servercomms:
+    build: .
+    volumes:
+      - shared_data:/app/data
+    command: /app/makejobs.sh
+    network_mode: "host"
+
+
+volumes:
+  shared_data:
