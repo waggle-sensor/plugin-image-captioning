@@ -1,19 +1,5 @@
-
 # Slack Bot Server Communications and the Code Underneath
 
-## How to run
-
-You must have Ollama running with Gemma2 on an open port. In line 12 of **userToServer.py** the line reads:
-```
-OLLAMA_SERVER = "http://localhost:11433/api/generate"
-```
-Change this to your configuration. Then, once Ollama works, run:
-```
-sudo docker-compose up --build
-```
-
-
-## How the Code is Configured
 The folder is compormised of four section: 
 1. **Python Files**
     - userToServer.py

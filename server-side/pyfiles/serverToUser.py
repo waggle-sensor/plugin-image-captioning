@@ -7,18 +7,38 @@ from PIL import Image
 import io 
 import json
 import time
+import subprocess
 
-#global variables for safe keeping :) 
-#USER_DATA = '/home/ryanrearden/Documents/SAGE_fromLaptop/summer2024/ryan/code/SAGE_Dev/Blade/v002_slack_bot/user_data.json' 
 USER_DATA = '/app/data/user_data.json' 
-
+DEPLOYED_PATH = '/app/data/deployed.json'
 SAGE_USERNAME = os.environ["SAGE_USERNAME"]
 SAGE_USERTOKEN = os.environ["SAGE_USERTOKEN"]
 
-# see README if unsure what this means
+
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 
-def gogogo():
+
+'''
+This code has two primary activities: listening for new data, and sending data for the user
+
+Slack listens by never terminating. 
+getData() runs by requesting data when it can. 
+
+Because of Slack, the script never actually finishes. So I can't have the script run, stop, and run again. 
+
+Since the code never ends, and I need some code to run multiple times while the code never ends,
+the only way to get around that is to have one massive function for everything
+and then run it every 60 seconds
+
+In another version, it may be nice to handle those two activities in seperate code (good design philosophy?),
+but it is much easier to do it in one
+
+my vision is "slack.py" that just does the listening and talking. 
+and then a few backend scripts that handle the other things
+
+These problems *should* solve themselves when we migrate to the website 
+'''
+def main():
     #Get the JSON file if it exists. Otherwise make something that would be JSONable 
     with open(USER_DATA, 'r') as f:
         try:
@@ -28,27 +48,27 @@ def gogogo():
 
     #takes in img url, login session, and where the img should be stored
     #basically downloads one image at a time and names it tmp.jpg so that Slack can send it
-    #Someone please let me know if I can do this without downloading the image. Seems uneeded 
-    #TODO do this without having to download the image
+    #Someone please let me know if I can do this without downloading the image. Seems unneeded
+    #TODO do this without having to download the image. Is unneeded
 
     def process_file_from_url(url):
         try:
             with requests.Session() as session:
-                #get username and usertoken for verfication
+                #get username and usertoken for verification
                 session.auth = (SAGE_USERNAME, SAGE_USERTOKEN)
                 response = session.get(url.strip())
                 response.raise_for_status()  # Raise HTTP error for issues
                 # Create an in-memory file-like object
                 file_content = io.BytesIO(response.content)
                 print(f'Successfully downloaded and opened file from {url}')
-                file_content.seek(0)  # Reset file pointer to the start
+                file_content.seek(0)  # Reset file pointer to the start (I don't really understand this)
                 
                 try:
                     #for debugging
                     print(file_content)
 
                     #lame name but fine
-                    #TODO make this name match the name on the SAGE website
+                    #TODO make this name match the name on the SAGE website. (very low priority)
                     filename= "tmp.jpg"
 
                     # Open and process the image with Pillow
@@ -79,14 +99,16 @@ def gogogo():
 
     #sage data client stuff.
     #Gets all of the info from the plugin that is needed
-    def getData():
+    #We are abstracting! the variable "plugin" has replaced a hard-coded plugin :)
+    def getData(plugin):
         df = sage_data_client.query(
-        start="-3h", 
+        start="-2m", 
         filter={
-            "plugin": "10.31.81.1:5000/local/capture-and-describe-plugin"
-        }
-    )
+            "plugin": f"{plugin}"
+            }
+        )
         return df
+    
 
 
 
@@ -95,7 +117,7 @@ def gogogo():
     #user_description is what the user is looking for (ex. smoke)
     #channel ID is used to find the right place to send the message on SLACK
         #it will be the same place the user sent the request. Wherever that is. See userToServer.py to get more info
-        #TODO send the user this information in their private slack channel regardless of where they send the inital message
+        #TODO send the user this information in their private slack channel regardless of where they send the initial message (lowish priority)
     #user_ID is the ID of the user who sent the message. User IDs look like "<@APOKF3POI>" (something along those lines)
     def sendToSlack(image, des, user_description, channel_ID, user_ID):
 
@@ -108,11 +130,19 @@ def gogogo():
                 )
         
         #chat_postMessage sends the description along with the other strings
-        app.client.chat_postMessage(
-            channel=channel,
-            text=f"{user_ID}\nFound a match for {user_description}\n{des}",
-            )
-        
+
+        #checks if there is a user_description (image-sampler will not have this)
+        if(user_description):
+            app.client.chat_postMessage(
+                channel=channel,
+                text=f"{user_ID}\nFound a match for {user_description}\n{des}",
+                )
+        else:
+            app.client.chat_postMessage(
+                channel=channel,
+                text=f"{user_ID}\nCaptured an image",
+                )
+
         #Descriptions are sent faster than images. This makes it hard to know what description goes to what image
         #5 seconds is enough time to send each pair and have them together in the app
         #TODO Instead of time.sleep, have a listener that allows program continuation after the image is verfified to be in the app
@@ -130,62 +160,170 @@ def gogogo():
         # Return the value if matches are found, else return None
         return matches['value'].iloc[0] if not matches.empty else None
 
-    #selects the time and img link for furthur processing
-    #I told chatGPT to make the code with as few lines as possible. It does make it a little hard to read
-    #Basically checks if the new plugin data matches with any user request. If it does, the image and description are sent to the user
-    try: 
-        df = getData()
-        print(df)
+    def delete_job_entry(job_id, file_path=DEPLOYED_PATH):
+        try: 
 
-        #this is from the sage.data.client info
+            with open(file_path, 'r') as f:
+                deployed_data = json.load(f)
+
+            to_delete = None
+            for key, value in deployed_data.items():
+                if value == job_id:
+                    to_delete = key
+                    break
+            
+            if to_delete:
+
+                #removed job and YAML 
+                subprocess.run(['sesctl', 'rm', '--force', job_id])
+                subprocess.run(['rm', f'data/jobyamls/{to_delete}.yaml'])
+
+                del deployed_data[to_delete]
+                print(f"Deleted entry: '{to_delete}': '{job_id}'")
+
+                with open(file_path, 'w') as f:
+                    json.dump(deployed_data, f, indent=4)
+            
+            else:
+                print(f"No entry found for job ID: {job_id}")
+
+        except Exception as e:
+            print("oh also maybe {e}")
+
+#removes user information from JSON file after the image and description is sent
+    def delete_user_id(plugin, meta_vsn, user_description, channel_id, user_id, file_path=USER_DATA):
+        # Step 1: Load the JSON data
+        with open(file_path, 'r') as f:
+            data = json.load(f)
         
-        #if statement helps if there is no data available 
-        required_columns = ["timestamp", "name", "value", "meta.vsn"]
-        missing_columns = [col for col in required_columns if col not in df.columns]
+        # Step 2: Navigate through the structure and remove the user_id
+        if plugin in data: 
+            if meta_vsn in data[plugin]:
+                if user_description in data[plugin][meta_vsn]:
+                    if channel_id in data[plugin][meta_vsn][user_description]:
+                        user_list = data[plugin][meta_vsn][user_description][channel_id]
 
-        if not missing_columns:
-            imgs_and_des = df[required_columns]
-                
-            # Process the DataFrame
-            #take the data and check each part individually
-            for i, row in imgs_and_des[imgs_and_des['name'] == 'description'].iterrows():
-                #get the node (ex. W023)
-                meta_vsn = row['meta.vsn']
-                #if the node is found in a request continue 
-                if meta_vsn in user_data:
-                    #check all of the user descriptions. Then channels are the next itteration so keep that just in case
-                    for user_description, channels in user_data[meta_vsn].items():
-                        #if something in the user description is in the image description, continue
-                        #TODO use a better search method than just "in"
-                        if user_description in row['value']:
-                            #call the image description "des"
-                            des = row['value']
-                            #By this point we know an image has what the user wants. Now we have to find that image
-                            #First look one above and one below the description by timestamp.
-                            #The timestamps should match so this will be easy to find. If it is not above or below, check everything else
-                            upload_value = (
-                                imgs_and_des.iloc[i-1]['value'] if i > 0 and imgs_and_des.iloc[i-1]['timestamp'] == row['timestamp'] and imgs_and_des.iloc[i-1]['name'] == 'upload'
-                                else imgs_and_des.iloc[i+1]['value'] if i < len(imgs_and_des) - 1 and imgs_and_des.iloc[i+1]['timestamp'] == row['timestamp'] and imgs_and_des.iloc[i+1]['name'] == 'upload'
-                                #this "else" function *can* return "None" which then just stops the process
-                                else find_upload_by_timestamp(row['timestamp'], i)
-                                
-                            )
-                            #if the image is found, open it and send it!
-                            if upload_value:
-                                for channel_ID, user_IDs in channels.items():
-                                    for user_ID in user_IDs:
-                                        print(f"Timestamp: {row['timestamp']}, Channel ID: {channel_ID}, User ID: {user_ID}, Upload Value: {upload_value}")
-                                        image = process_file_from_url(upload_value)
-                                        sendToSlack(image, des, user_description, channel_ID, user_ID)
-        else:
-            print(f"Missing columns: {missing_columns}")
+                        if user_id in user_list:
+                            user_list.remove(user_id)
+                            print(f"Removed user ID: {user_id}")
 
+                        # Step 3: Check if the channel_id has any users left
+                        if not user_list:
+                            del data[plugin][meta_vsn][user_description][channel_id]
+                            print(f"Deleted empty channel ID: {channel_id}")
+
+                        # Step 4: Check if the user_description has any channel_ids left
+                        if not data[plugin][meta_vsn][user_description]:
+                            del data[plugin][meta_vsn][user_description]
+                            print(f"Deleted empty user description: {user_description}")
+
+                        # Step 5: Check if the meta_vsn has any user_descriptions left
+                        if not data[plugin][meta_vsn]:
+                            del data[plugin][meta_vsn]
+                            print(f"Deleted empty meta.vsn: {meta_vsn}")
+                        
+                        if not data[plugin]:
+                            del data[plugin]
+                            print(f"Deleted empty meta.vsn: {plugin}")
+
+        # Step 6: Save the updated JSON data back to the file
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=5)
+
+    #selects the time and img link for further processing
+    #I told chatGPT to make the code with as few lines as possible. It does make it a little hard to read
+    #Basically checks if the new plugin data matches with any user request. If it does, data is sent to the user
+    try:  
+        with open(USER_DATA, 'r') as f:
+            data = json.load(f)
+        if data:
+            #if there is data, look at the plugins
+            for plugin in data.keys():
+                df = getData(plugin)
+                #if the plugin is this, make sure it has the required columns
+                if(plugin == "registry.sagecontinuum.org/theone/imagesampler:0.3.0"):
+                    required_columns = ["name", "meta.vsn", "value", "meta.job"]
+                    missing_columns = [col for col in required_columns if col not in df.columns]
+                    if not missing_columns:
+                        imgs_and_des = df[required_columns].dropna()
+                        
+                        # Process the DataFrame
+                        #take the data and check each part individually
+                        #for image upload, the name is upload. 
+                        for i, row in imgs_and_des[imgs_and_des['name'] == 'upload'].iterrows():
+                            #get the node (ex. W023)
+                            meta_vsn = row['meta.vsn']
+
+
+                            job = str(row['meta.job']).split("-")[-1] #just gets job ID
+                            
+
+                            #if the node is found in a request continue 
+                            if plugin in user_data:
+                                if meta_vsn in user_data[plugin]:
+                                    for user_description, channels in user_data[plugin][meta_vsn].items():
+                                        des = ""
+                                        upload_value = imgs_and_des['value'][i]
+                                        print(i)
+                                        for channel_ID, user_IDs in channels.items():
+                                            for user_ID in user_IDs:
+                                                print(f"Channel ID: {channel_ID}, User ID: {user_ID}, Upload Value: {upload_value}")
+                                                image = process_file_from_url(upload_value)
+                                                sendToSlack(image, des, user_description==False, channel_ID, user_ID)
+                                        delete_user_id(plugin, meta_vsn, user_description, channel_ID, user_ID)   
+                                        delete_job_entry(job)
+                        else:
+                            print(f"Missing columns: {missing_columns}")
+                if (plugin == "registry.sagecontinuum.org/yonghokim/plugin-image-captioning:0.1.0"):
+                    required_columns = ["timestamp", "name", "value", "meta.vsn", "meta.job"]
+                    missing_columns = [col for col in required_columns if col not in df.columns]
+
+                    if not missing_columns:
+                        imgs_and_des = df[required_columns]
+                            
+                        # Process the DataFrame
+                        #take the data and check each part individually
+                        for i, row in imgs_and_des[imgs_and_des['name'] == 'env.image.description'].iterrows():
+                            #get the node (ex. W023)
+                            job = str(row['meta.job']).split("-")[-1] #just gets job ID
+                            meta_vsn = row['meta.vsn']
+                            #if the node is found in a request continue 
+                            if plugin in user_data:
+                                if meta_vsn in user_data[plugin]:
+                                    #check all of the user descriptions. Then channels are the next iteration so keep that just in case
+                                    for user_description, channels in user_data[plugin][meta_vsn].items():
+                                        #if something in the user description is in the image description, continue
+                                        #TODO use a better search method than just "in"
+                                        if user_description in row['value']:
+                                            #call the image description "des"
+                                            des = row['value']
+                                            #By this point we know an image has what the user wants. Now we have to find that image
+                                            #First look one above and one below the description by timestamp.
+                                            #The timestamps should match so this will be easy to find. If it is not above or below, check everything else
+                                            upload_value = (
+                                                imgs_and_des.iloc[i-1]['value'] if i > 0 and imgs_and_des.iloc[i-1]['timestamp'] == row['timestamp'] and imgs_and_des.iloc[i-1]['name'] == 'upload'
+                                                else imgs_and_des.iloc[i+1]['value'] if i < len(imgs_and_des) - 1 and imgs_and_des.iloc[i+1]['timestamp'] == row['timestamp'] and imgs_and_des.iloc[i+1]['name'] == 'upload'
+                                                #this "else" function *can* return "None" which then just stops the process
+                                                else find_upload_by_timestamp(row['timestamp'], i)
+                                                
+                                            )
+                                            #if the image is found, open it and send it!
+                                            if upload_value:
+                                                for channel_ID, user_IDs in channels.items():
+                                                    for user_ID in user_IDs:
+                                                        print(f"Timestamp: {row['timestamp']}, Channel ID: {channel_ID}, User ID: {user_ID}, Upload Value: {upload_value}")
+                                                        image = process_file_from_url(upload_value)
+                                                        sendToSlack(image, des, user_description, channel_ID, user_ID)
+                                                delete_user_id(plugin, meta_vsn, user_description, channel_ID, user_ID)   
+                                                delete_job_entry(job)
+                    else:
+                        print(f"Missing columns: {missing_columns}")  
     #say if anything goes wrong 
     except Exception as e:
         print("ERROR ", e)
 
 while True:
-    gogogo()
+    main()
     time.sleep(60)
 
 if __name__ == "__main__":
@@ -196,4 +334,4 @@ if __name__ == "__main__":
 
 
 
-#TODO have the user queries be deleted after a certian amount of time
+#TODO have the user queries be deleted after a certain amount of time if not found

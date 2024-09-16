@@ -27,7 +27,7 @@ RUN chmod +x /app/makejobs.sh
 
 ENV SLACK_BOT_TOKEN=''
 ENV SLACK_APP_TOKEN=''
-ENV SAGE_USERNAME='rrearden'
+ENV SAGE_USERNAME=''
 ENV SAGE_USERTOKEN=''
 
 ############## FOR SESCTL #######################

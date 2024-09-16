@@ -12,7 +12,7 @@ services:
     build: .
     volumes:
       - shared_data:/app/data
-    command: python -u /app/serverToUser_justimg.py
+    command: python -u /app/serverToUser.py
     network_mode: "host"
 
   servercomms:
