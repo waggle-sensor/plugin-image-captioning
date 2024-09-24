@@ -1,0 +1,14 @@
+name: $NAME
+plugins:
+  - name: image-sampler
+    pluginSpec:
+      image: $plugin
+      args:
+      - -stream
+      - bottom_camera
+nodes:
+  $NODE:
+scienceRules:
+  - "schedule(image-sampler): cronjob('image-sampler', '* * * * *')"
+successCriteria:
+  - WallClock(1d)

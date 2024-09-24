@@ -81,11 +81,13 @@ def getnodes(location, sageData):
 
 #Try to read the user data
 #If it doesn't exist, make a JSONable object
-with open(USER_DATA, 'r') as f:
-    try:
-        user_data = json.load(f)
-    except Exception as e:
-        user_data = {}
+def readData():
+    with open(USER_DATA, 'r') as f:
+        try:
+            user_data = json.load(f)
+        except Exception as e:
+            user_data = {}
+readData()
 
 #load all the data up
 sageData = loadSageData()
@@ -95,6 +97,11 @@ sageData = loadSageData()
 @app.event("message")
 @app.event("app_mention")
 def handle_message_events(body, logger, say):
+    with open(USER_DATA, 'r') as f:
+        try:
+            user_data = json.load(f)
+        except Exception as e:
+            user_data = {}
     # Extract the message text from the body dictionary
     message_text = body["event"]["text"]
 
@@ -114,7 +121,7 @@ def handle_message_events(body, logger, say):
 
     try: 
         #Prompt engineering plus Ollama
-        botReply = runOllama(f"Please only reply with what the user wants to use, what the user is searching for (if they are searching for anything) and where the user wants to use the plugin. Reply specifically with what the user wants to use, what the user is searching for, and where the user is looking for it all on new lines. If the user asked: Tell me when you see a car in Chicago. Print plugin-image-capturing, then on a new line, print car, then on a newline print Chicago. If the user asks: Capture an image on W026. Print plugin-image-sampler, then, on a newline, print null, then on a newline, print W026. If the user asks: Let me know when there is a dog on the street in W0B5. print plugin-image-capturing, then on a newline, print dog, then on a newline, print W0B5. Perform like that. Now go ahead with this one: {message_text}")        #bot will reply with noun\nlocation
+        botReply = runOllama(f"Please only reply with what the user wants to use, what the user is searching for (if they are searching for anything) and where the user wants to use the plugin. Reply specifically with what the user wants to use, what the user is searching for, and where the user is looking for it all on new lines. If the user asked: Tell me when you see a car in Chicago. Print plugin-image-capturing, then on a new line, print car, then on a newline print Chicago. If the user asks: Capture an image on W026. Print plugin-image-sampler, then, on a newline, print null, then on a newline, print W026. If the user asks: Let me know when there is a dog on the street in W0B5. print plugin-image-capturing, then on a newline, print dog, then on a newline, print W0B5. If the user says something where you do not know the location. Explain what went wrong. Perform like that. If you don't understand what the user is saying, or you believe that the plugin is not plugin-image-capturing or plugin-image-sampler, say why. This is very important if you think there is no location to instead say your reasoning on why the request cannon be fulfilled.  Now go ahead with this one: {message_text}")        #bot will reply with noun\nlocation
         #separating by newline will split these
 
         #So if I said "Tell me when there is a dragon in Norway", Ollama would output:
@@ -160,7 +167,8 @@ def handle_message_events(body, logger, say):
                 say(f"Deploying at {location} to capture one image")
             if(plugin == "plugin-image-capturing"):
                 plugin = "registry.sagecontinuum.org/yonghokim/plugin-image-captioning:0.1.0"
-                say(f"Deploying at {location} and looking for {lookFor}")
+                #say(f"Deploying at {location} and looking for {lookFor}")
+                say(f"Looking for {lookFor}")
 
             #then dump all of that info into a json file so that serverToUser.py can pick it up later when stuff comes
             #in through the plugin
@@ -185,7 +193,9 @@ def handle_message_events(body, logger, say):
 
             with open(USER_DATA, 'w') as f:
                 json.dump(user_data, f, indent=5)
-                '''
+            readData()
+
+            '''
             ********The JSON file could, for example, look like this*****
             *    {                                                      *
             *    "W0B3": {                                              *
@@ -197,9 +207,9 @@ def handle_message_events(body, logger, say):
             *   }                                                       *
             *}                                                          *
             *************************************************************
-                '''
+            '''
         else:
-            say("No matching nodes found. Please try again")
+            say(botReply)
             
     #say if something messed up
     except Exception as error:
