@@ -39,6 +39,7 @@ The folder is compromised of four section:
 
 #Be sure to stick @Sage Search at the front, otherwise it will not work properly
 ```
+### Server-Side
 ```
 #First go to the directory of the docker-compose file and run
 sudo docker-compose up -d
